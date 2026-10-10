@@ -393,7 +393,10 @@ def detect_viirs_lance_c2_fires(state: str, district: str, start_date: str, end_
             
             return {
                 'fire_pixels': 0,
+                'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
+                'area_disclaimer': 'Nominal hotspot footprint only: each detected pixel contributes its nominal 375m x 375m area. This is not verified burned area; hotspots can be sub-pixel. Burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'pixel_resolution_meters': 375,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
                 'hotspots_coordinates': [],
@@ -408,7 +411,13 @@ def detect_viirs_lance_c2_fires(state: str, district: str, start_date: str, end_
         
         # Calculate statistics
         fire_pixels = len(hotspots)
-        fire_area_hectares = fire_pixels * 14.0625  # 375m x 375m = 140,625 m² = 14.0625 hectares
+        # Nominal pixel footprint only; a thermal hotspot does not mean the full pixel burned.
+        nominal_footprint_hectares = fire_pixels * 14.0625  # 375m x 375m = 140,625 m² = 14.0625 ha
+        area_disclaimer = (
+            'Nominal hotspot footprint represents the aggregate area of 375m pixels containing active '
+            'thermal detections, NOT verified burned area. Fires may cover only part of a pixel. '
+            'Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).'
+        )
         max_frp = max([h['frp'] for h in hotspots], default=0.0)
         
         # Store current fire data for CSV export
@@ -447,7 +456,12 @@ def detect_viirs_lance_c2_fires(state: str, district: str, start_date: str, end_
         
         return {
             'fire_pixels': fire_pixels,
-            'fire_area_hectares': round(fire_area_hectares, 2),
+            'nominal_footprint_hectares': round(nominal_footprint_hectares, 2),
+            # Legacy field retained for existing clients; use nominal_footprint_hectares instead.
+            'fire_area_hectares': round(nominal_footprint_hectares, 2),
+            'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
+            'area_disclaimer': area_disclaimer,
+            'pixel_resolution_meters': 375,
             'fire_hotspots': len(hotspots),
             'max_frp': round(max_frp, 3),
             'hotspots_coordinates': hotspots,
@@ -565,7 +579,8 @@ async def dashboard():
             <h3>🎯 Detection Results</h3>
             <div id="resultsContainer" class="hidden">
                 <div class="result-item"><span>Fire Pixels:</span> <span id="firePixels">-</span></div>
-                <div class="result-item"><span>Fire Area:</span> <span id="fireArea">-</span></div>
+                <div class="result-item"><span>Nominal Hotspot Footprint:</span> <span id="fireArea">-</span></div>
+                <div style="font-size: 10px; color: #bdc3c7; margin-top: -3px; margin-bottom: 5px;">Pixel footprint only; hotspots may be sub-pixel. This is not measured burned area.</div>
                 <div class="result-item"><span>Fire Spots:</span> <span id="fireHotspots">-</span></div>
                 <div class="result-item"><span>Max FRP:</span> <span id="maxFRP">-</span></div>
                 <div class="result-item"><span>Images Used:</span> <span id="viirsImages">-</span></div>
@@ -799,7 +814,7 @@ async def dashboard():
                 
                 // Update results
                 document.getElementById('firePixels').textContent = data.fire_pixels.toLocaleString();
-                document.getElementById('fireArea').textContent = data.fire_area_hectares + ' hectares';
+                document.getElementById('fireArea').textContent = (data.nominal_footprint_hectares ?? data.fire_area_hectares) + ' ha';
                 document.getElementById('fireHotspots').textContent = data.fire_hotspots.toLocaleString();
                 document.getElementById('maxFRP').textContent = data.max_frp + ' MW';
                 document.getElementById('viirsImages').textContent = data.viirs_images_used;
@@ -921,7 +936,7 @@ async def dashboard():
                 
                 document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
                 
-                alert(`🎯 LANCE C2 Fire Detection Complete!\\n\\nFire Spots Detected: ${data.fire_hotspots}\\nTotal Fire Area: ${data.fire_area_hectares} hectares\\nMax FRP: ${data.max_frp} MW\\nDetection Method: ${data.detection_method}\\nLANCE C2 Images Used: ${data.viirs_images_used}\\n\\n📍 Real-time data with light color palette!\\n🔥 Multi-round detection with ${data.sensitivity || 'ultra-low thresholds'}`);
+                alert(`🎯 LANCE C2 Fire Detection Complete!\\n\\nFire Spots Detected: ${data.fire_hotspots}\\nNominal Hotspot Pixel Footprint: ${data.nominal_footprint_hectares ?? data.fire_area_hectares} ha\\n(Not verified burned area; hotspots may be sub-pixel. Burn scars require separate analysis.)\\nMax FRP: ${data.max_frp} MW\\nDetection Method: ${data.detection_method}\\nLANCE C2 Images Used: ${data.viirs_images_used}\\n\\n📍 Real-time data with light color palette!\\n🔥 Multi-round detection with ${data.sensitivity || 'ultra-low thresholds'}`);
 
             } catch (error) {
                 console.error('❌ Fire detection error:', error);

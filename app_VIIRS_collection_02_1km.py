@@ -366,6 +366,7 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
                 'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
                 'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
                 'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
@@ -427,7 +428,9 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
         return {
             'fire_pixels': fire_pixels,
             'nominal_footprint_hectares': round(nominal_footprint_hectares, 2),
-            'fire_area_hectares': round(nominal_footprint_hectares, 2),  # Maintained for backwards compatibility
+            # Legacy compatibility alias; new clients should use nominal_footprint_hectares.
+            'fire_area_hectares': round(nominal_footprint_hectares, 2),
+            'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
             'area_disclaimer': area_disclaimer,
             'pixel_resolution_meters': 1000,
             'fire_hotspots': len(hotspots),
@@ -465,6 +468,7 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
                 'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
                 'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
                 'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
@@ -503,6 +507,7 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
                 'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
                 'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
                 'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
@@ -569,7 +574,8 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
         return {
             'fire_pixels': fire_pixels,
             'nominal_footprint_hectares': round(nominal_footprint_hectares, 2),
-            'fire_area_hectares': round(nominal_footprint_hectares, 2),  # Maintained for backwards compatibility
+            'fire_area_hectares': round(nominal_footprint_hectares, 2),  # Deprecated compatibility alias
+            'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
             'area_disclaimer': area_disclaimer,
             'pixel_resolution_meters': 1000,
             'fire_hotspots': len(hotspots),
@@ -594,6 +600,7 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
             'nominal_footprint_hectares': 0.0,
             'fire_area_hectares': 0.0,
             'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+            'legacy_fire_area_field_note': 'Deprecated compatibility alias for nominal_footprint_hectares; this is not verified burned area.',
             'pixel_resolution_meters': 1000,
             'fire_hotspots': 0,
             'max_frp': 0.0,
