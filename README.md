@@ -1,3 +1,4 @@
+HEAD
 # Satellite Stubble Burning Detection & Analysis Platform
 
 ![GitHub repo size](https://img.shields.io/github/repo-size/your-username/stubble-burning-detection)![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)![License](https://img.shields.io/badge/License-MIT-yellow.svg)
@@ -61,3 +62,6 @@ Follow these steps to set up and run the project locally.
 ```bash
 git clone https://github.com/deepeshyadav760/stubble-burning-detection.git
 cd stubble-burning-detection
+
+# stubble_burning_detection_VIIPS
+050278c1e2ea530c0eb2d9e14e5bd7c2f346a0a9
