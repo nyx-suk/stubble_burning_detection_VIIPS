@@ -18,7 +18,7 @@ from fastapi import HTTPException
 
 from app.config import DEFAULT_HOTSPOTS_LIMIT, MAX_HOTSPOTS_LIMIT
 from app.services.cache import metadata_cache, query_cache
-from app.services.ee_client import handle_ee_error, run_with_timeout
+from app.services.ee_client import handle_ee_error, run_with_timeout, inclusive_end_to_exclusive
 from app.services.gee_analysis import (
     get_agricultural_mask,
     get_district_boundary,
@@ -41,7 +41,8 @@ _VNP14A1_COLLECTION = "NASA/VIIRS/002/VNP14A1"
 def is_viirs_fire_mask(value) -> bool:
     """True for documented VNP14A1 active-fire classes (7, 8, or 9)."""
     try:
-        return int(round(float(value))) in (7, 8, 9)
+        numeric = float(value)
+        return numeric.is_integer() and int(numeric) in (7, 8, 9)
     except (TypeError, ValueError):
         return False
 
@@ -257,7 +258,7 @@ def detect_viirs_fires_enhanced(
 
         viirs = (
             ee.ImageCollection(_VNP14A1_COLLECTION)
-            .filterDate(start_date, end_date)
+            .filterDate(start_date, inclusive_end_to_exclusive(end_date))
             .filterBounds(district_geom)
         )
 

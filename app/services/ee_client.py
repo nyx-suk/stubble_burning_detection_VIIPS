@@ -2,6 +2,7 @@
 
 import concurrent.futures
 import logging
+from datetime import date, timedelta
 from typing import Any, Callable, Optional
 
 import ee
@@ -13,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 # Shared executor for blocking Earth Engine operations
 _ee_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10, thread_name_prefix="ee_worker")
+
+
+def inclusive_end_to_exclusive(end_date: str) -> str:
+    """Convert a UI's inclusive YYYY-MM-DD end date to Earth Engine's exclusive bound."""
+    return (date.fromisoformat(str(end_date)[:10]) + timedelta(days=1)).isoformat()
 
 
 def run_with_timeout(

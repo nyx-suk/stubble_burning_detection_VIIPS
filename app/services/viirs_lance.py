@@ -17,7 +17,7 @@ from fastapi import HTTPException
 
 from app.config import DEFAULT_HOTSPOTS_LIMIT, MAX_HOTSPOTS_LIMIT
 from app.services.cache import metadata_cache, query_cache
-from app.services.ee_client import run_with_timeout, handle_ee_error
+from app.services.ee_client import run_with_timeout, handle_ee_error, inclusive_end_to_exclusive
 from app.services.gee_analysis import (
     get_agricultural_mask,
     get_district_boundary,
@@ -284,7 +284,7 @@ def detect_viirs_lance_c2_fires(
         # Build the collection server-side, filtered before any data transfer
         viirs = (
             ee.ImageCollection(_LANCE_COLLECTION)
-            .filterDate(start_date, end_date)
+            .filterDate(start_date, inclusive_end_to_exclusive(end_date))
             .filterBounds(district_geom)
         )
 

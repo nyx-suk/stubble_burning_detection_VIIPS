@@ -1,3 +1,9 @@
-# Ignore Python virtual environments
-stubble_venv/
 .venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.venv/
+exports/
+*.sqlite3
+*.db

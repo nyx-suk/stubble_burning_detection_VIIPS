@@ -4,18 +4,38 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Explore satellite fire detections and agricultural burning indicators.">
-  <title>Satellite Fire Monitor</title>
+  <title>AgniWatch AI — Satellite Fire Monitor</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand-mark" aria-hidden="true">◎</div>
-    <div><p class="eyebrow">GEOSPATIAL MONITORING</p><h1>Satellite Fire Monitor</h1></div>
-    <div class="topbar-status"><span class="status-dot"></span>VIIRS monitoring</div>
+    <div><p class="eyebrow">GEOSPATIAL MONITORING</p><h1>AgniWatch AI</h1></div>
+    <div class="topbar-status"><span class="status-dot"></span><span id="systemMode">Offline demo ready · live queries optional</span></div>
   </header>
   <main class="layout">
     <aside class="panel">
+      <section class="panel-section">
+        <p class="eyebrow">WORKING WITHOUT EARTH ENGINE</p>
+        <label for="dataMode">Observation dataset</label>
+        <select id="dataMode"><option value="demo" selected>Demo sample (simulated)</option><option value="uploaded">My uploaded VIIRS CSV</option><option value="live">Saved live observations</option><option value="all">All stored sources</option></select>
+        <button id="loadDemoButton" class="button button-primary">Load usable demo dataset</button>
+        <p id="dataMessage" class="hint">Demo rows are clearly labeled examples, not real fire detections. For FIRMS CSVs without district columns, the selected district is assigned to every row; upload only a district-filtered file.</p>
+        <label for="csvFile">Import VIIRS/FIRMS CSV</label><input id="csvFile" type="file" accept=".csv,text/csv">
+        <button id="uploadCsvButton" class="button button-small">Import selected CSV</button>
+        <button id="showLocalButton" class="button button-small">Show stored detections on map</button>
+      </section>
+      <section class="panel-section">
+        <p class="eyebrow">DISTRICT RISK & NEXT-DAY OUTLOOK</p>
+        <button id="assessButton" class="button button-small">Assess district and outlook</button>
+        <div id="riskPanel" class="operation-card">Load demo data or import observations, then select a district.</div>
+      </section>
+      <section class="panel-section">
+        <div class="results-heading"><p class="eyebrow">ACTION ALERTS</p><button id="testAlertButton" class="button button-small">Test alert</button></div>
+        <p class="hint">Alerts come from configured risk thresholds. Test alerts are simulated and do not represent incidents.</p>
+        <div id="alertsPanel" class="alert-list">No alerts loaded.</div>
+      </section>
       <section class="panel-section">
         <p class="eyebrow">DETECTION SOURCE</p>
         <label for="product">Satellite product</label>
@@ -35,6 +55,9 @@
           <div><label for="endDate">End date</label><input id="endDate" type="date"></div>
         </div>
         <button id="analyzeButton" class="button button-primary">Analyze hotspots</button>
+        <div class="date-grid"><div><label for="pageSize">Rows per page</label><select id="pageSize"><option>25</option><option selected>100</option><option>250</option><option>500</option></select></div><div><label for="exportFormat">Batch format</label><select id="exportFormat"><option>CSV</option><option>GeoJSON</option></select></div></div>
+        <button id="batchExportButton" class="button button-small">Create historical export</button>
+        <div id="exportJobs" class="job-list" aria-live="polite"></div>
         <p id="status" class="status-message" role="status" aria-live="polite">Choose an area and date range.</p>
       </section>
       <section id="results" class="panel-section results hidden">
@@ -44,6 +67,7 @@
         <p class="caveat">Hotspot footprint is the area of pixels containing thermal detections. It is not verified burned area; a hotspot may cover only part of a pixel. Burn scars require separate analysis.</p>
         <div class="metric"><span>Maximum FRP</span><strong id="maxFrp">—</strong></div>
         <div class="metric"><span>Images used</span><strong id="imageCount">—</strong></div>
+        <div class="pagination"><button id="previousPage" class="button button-small" disabled>Previous</button><span id="pageInfo">Page 1</span><button id="nextPage" class="button button-small" disabled>Next</button></div>
       </section>
       <section class="legend panel-section">
         <p class="eyebrow">MAP LEGEND</p>

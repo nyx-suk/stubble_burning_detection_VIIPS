@@ -20,8 +20,11 @@ const runButton = document.getElementById('analyzeButton');
 const exportButton = document.getElementById('exportButton');
 const statusNode = document.getElementById('status');
 const mapStatus = document.getElementById('mapStatus');
+const dataMode = document.getElementById('dataMode');
 let hotspotLayer = L.layerGroup().addTo(map);
 let boundaryLayer = null;
+let currentPage = 1;
+let exportPoll = null;
 
 function dateInputValue(date) {
   const offset = date.getTimezoneOffset();
@@ -83,6 +86,7 @@ async function loadDistricts(state) {
 async function showBoundary(state, district) {
   if (boundaryLayer) map.removeLayer(boundaryLayer);
   if (!state || !district) return;
+  if (['demo', 'uploaded'].includes(dataMode.value)) return;
   try {
     const result = await requestJson(`/api/district-boundary/${encodeURIComponent(state)}/${encodeURIComponent(district)}`);
     if (!result.boundary_geojson) return;
@@ -110,7 +114,9 @@ function renderHotspots(points) {
       fillOpacity: 0.9
     });
     const frp = point.frp === undefined ? '—' : `${point.frp} MW`;
-    marker.bindPopup(`<strong>Satellite hotspot</strong><br>FRP: ${frp}<br>Confidence: ${point.confidence ?? '—'}<br>Source: ${point.source ?? 'VIIRS'}`);
+    const popup = document.createElement('div');
+    popup.textContent = `${point.mode === 'demo' ? 'DEMO · simulated thermal point' : 'Thermal observation'} | FRP: ${frp} | Confidence: ${point.confidence ?? '—'} | Source: ${point.source ?? 'VIIRS'}`;
+    marker.bindPopup(popup);
     marker.addTo(hotspotLayer);
     count += 1;
   });
@@ -127,7 +133,7 @@ function getNominalFootprint(data) {
   return data.nominal_footprint_hectares ?? data.fire_area_hectares;
 }
 
-async function analyze() {
+async function analyze(page = 1) {
   const state = stateSelect.value;
   const district = districtSelect.value;
   if (!state || !district) return setStatus('Select a state and district first.', 'error');
@@ -141,19 +147,27 @@ async function analyze() {
     const data = await requestJson(`/api/detect/${productSelect.value}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state, district, start_date: startInput.value, end_date: endInput.value })
+      body: JSON.stringify({ state, district, start_date: startInput.value, end_date: endInput.value,
+        limit: 5000, page, page_size: Number(document.getElementById('pageSize').value) })
     });
     const points = data.hotspots_coordinates || [];
+    dataMode.value = 'live'; updateSystemMode();
+    document.getElementById('dataMessage').textContent = 'Live Earth Engine query result. The original composites lack per-hotspot acquisition dates, so this map result is not inserted into the dated prediction ledger. Import timestamped historical CSV for risk/outlook.';
     const count = renderHotspots(points);
-    document.getElementById('hotspotCount').textContent = (data.fire_hotspots ?? data.fire_pixels ?? count).toLocaleString();
+    currentPage = page;
+    const pagination = data.pagination || {};
+    document.getElementById('hotspotCount').textContent = (pagination.total_sampled ?? data.fire_hotspots ?? data.fire_pixels ?? count).toLocaleString();
     const footprint = getNominalFootprint(data);
     document.getElementById('footprint').textContent = Number.isFinite(Number(footprint)) ? `${Number(footprint).toLocaleString()} ha` : 'Not provided';
     document.getElementById('maxFrp').textContent = `${data.max_frp ?? 0} MW`;
     document.getElementById('imageCount').textContent = data.viirs_images_used ?? '—';
+    document.getElementById('previousPage').disabled = !pagination.has_previous;
+    document.getElementById('nextPage').disabled = !pagination.has_next;
+    document.getElementById('pageInfo').textContent = `Page ${pagination.page ?? page} of ${pagination.total_pages ?? 1}${pagination.truncated ? ' · sample capped' : ''}`;
     document.getElementById('results').classList.remove('hidden');
     exportButton.disabled = count === 0;
     const message = data.status || `Analysis complete · ${count} mapped hotspot${count === 1 ? '' : 's'}`;
-    setStatus(message, data.status && data.status.toLowerCase().includes('error') ? 'error' : 'success');
+    setStatus(`${message} · ${count} points on this page`, data.status && data.status.toLowerCase().includes('error') ? 'error' : 'success');
     mapStatus.textContent = `${count.toLocaleString()} hotspots · ${district}, ${state}`;
     if (data.district_boundary) {
       if (boundaryLayer) map.removeLayer(boundaryLayer);
@@ -161,7 +175,7 @@ async function analyze() {
       map.fitBounds(boundaryLayer.getBounds(), { padding: [22, 22], maxZoom: 10 });
     }
   } catch (error) {
-    setStatus(error.message, 'error');
+    setStatus(`${error.message} For long historical windows, create a batch export below.`, 'error');
     mapStatus.textContent = 'Analysis failed';
     exportButton.disabled = true;
   } finally {
@@ -177,6 +191,158 @@ districtSelect.addEventListener('change', () => showBoundary(stateSelect.value, 
 productSelect.addEventListener('change', updateProductDescription);
 runButton.addEventListener('click', analyze);
 exportButton.addEventListener('click', () => { window.location.href = '/api/export-csv'; });
+document.getElementById('previousPage').addEventListener('click', () => analyze(Math.max(1, currentPage - 1)));
+document.getElementById('nextPage').addEventListener('click', () => analyze(currentPage + 1));
+
+async function refreshExports() {
+  try {
+    const { jobs } = await requestJson('/api/exports');
+    const list = document.getElementById('exportJobs'); list.replaceChildren();
+    jobs.slice(0, 5).forEach(job => {
+      const row = document.createElement('div'); row.className = 'job-row';
+      const label = document.createElement('span'); label.textContent = `${job.id} · ${job.status}${job.error ? ` · ${job.error}` : ''}`; row.append(label);
+      if (job.status === 'completed') { const link = document.createElement('a'); link.href = job.download_url; link.textContent = 'Download'; row.append(link); }
+      if (job.status === 'queued') { const cancel = document.createElement('button'); cancel.className = 'button button-small'; cancel.textContent = 'Cancel'; cancel.onclick = async () => { try { await requestJson(`/api/exports/${job.id}/cancel`, { method: 'POST' }); await refreshExports(); } catch (e) { setStatus(e.message, 'error'); } }; row.append(cancel); }
+      if (job.status === 'failed') { const retry = document.createElement('button'); retry.className = 'button button-small'; retry.textContent = 'Retry'; retry.onclick = async () => { try { const next = await requestJson(`/api/exports/${job.id}/retry`, { method: 'POST' }); setStatus(`Retry ${next.id} queued.`, 'success'); await refreshExports(); } catch (e) { setStatus(e.message, 'error'); } }; row.append(retry); }
+      list.append(row);
+    });
+    const pending = jobs.some(j => ['queued', 'running'].includes(j.status));
+    if (pending && !exportPoll) exportPoll = setInterval(refreshExports, 2500);
+    if (!pending && exportPoll) { clearInterval(exportPoll); exportPoll = null; }
+  } catch (e) { document.getElementById('exportJobs').textContent = `Export status unavailable: ${e.message}`; }
+}
+
+document.getElementById('batchExportButton').addEventListener('click', async () => {
+  const button = document.getElementById('batchExportButton');
+  const payload = { state: stateSelect.value, district: districtSelect.value, start_date: startInput.value,
+    end_date: endInput.value, product: productSelect.value, limit: 5000,
+    file_format: document.getElementById('exportFormat').value };
+  if (!payload.state || !payload.district) return setStatus('Select a state and district before exporting.', 'error');
+  button.disabled = true; button.textContent = 'Submitting…';
+  try { const job = await requestJson('/api/exports/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    setStatus(`Export ${job.id} ${job.deduplicated ? 'already exists' : 'queued'}.`, 'success'); await refreshExports();
+  } catch (e) { setStatus(e.message, 'error'); }
+  finally { button.disabled = false; button.textContent = 'Create historical export'; }
+});
 
 updateProductDescription();
 loadStates();
+refreshExports();
+
+function selectedMode() { return dataMode.value; }
+function updateSystemMode() {
+  const labels = { demo: 'SIMULATED demo data', uploaded: 'Imported CSV data', live: 'Earth Engine live mode', all: 'Combined stored datasets' };
+  document.getElementById('systemMode').textContent = labels[selectedMode()] || 'Select data mode';
+}
+async function loadLocalObservations() {
+  const state = stateSelect.value, district = districtSelect.value;
+  if (!state || !district) return setStatus('Choose a state and district to show local observations.', 'error');
+  const q = new URLSearchParams({ state, district, mode: selectedMode(), limit: '5000' });
+  if (startInput.value) q.set('start_date', startInput.value);
+  if (endInput.value) q.set('end_date', endInput.value);
+  try {
+    const data = await requestJson(`/api/monitor/observations?${q}`);
+    const count = renderHotspots(data.observations || []);
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('hotspotCount').textContent = data.count.toLocaleString();
+    document.getElementById('footprint').textContent = 'Not estimated from demo/CSV rows';
+    document.getElementById('maxFrp').textContent = `${Math.max(0, ...data.observations.map(x => Number(x.frp) || 0)).toFixed(2)} MW`;
+    document.getElementById('imageCount').textContent = 'Local records';
+    exportButton.disabled = true;
+    mapStatus.textContent = `${count} ${selectedMode()} observations · ${district}, ${state}`;
+    if (count) map.fitBounds(hotspotLayer.getBounds(), { padding: [30, 30], maxZoom: 11 });
+    setStatus(`Loaded ${count} ${selectedMode()} observation(s)${data.warning ? ' · simulated examples, not live detections' : ''}.`, 'success');
+  } catch (error) { setStatus(`Could not load local observations: ${error.message}`, 'error'); }
+}
+
+function addRiskParagraph(parent, text, className = '') {
+  const item = document.createElement('p'); item.textContent = text; if (className) item.className = className; parent.append(item);
+}
+
+async function assessDistrict() {
+  const state = stateSelect.value, district = districtSelect.value;
+  if (!state || !district) return setStatus('Choose a district before risk assessment.', 'error');
+  const panel = document.getElementById('riskPanel'); panel.textContent = 'Calculating from stored observations…';
+  const q = new URLSearchParams({ state, district, mode: selectedMode() });
+  try {
+    const risk = await requestJson(`/api/risk?${q}`);
+    const prediction = await requestJson(`/api/prediction/next-day?${q}`);
+    panel.replaceChildren();
+    addRiskParagraph(panel, risk.score === null ? `${risk.category} · ${risk.evidence_level}` : `${risk.category} risk · ${risk.score}/100 · ${risk.evidence_level}`, 'risk-title');
+    addRiskParagraph(panel, `As of ${risk.as_of || 'no dated data'} · ${risk.observations_7d ?? 0} observations in 7 days; ${risk.observations_30d ?? 0} in 30 days.`);
+    (risk.factors || []).forEach(f => addRiskParagraph(panel, `${f.name}: +${f.points} — ${f.evidence}`));
+    addRiskParagraph(panel, `Action: ${risk.recommendation} Urgency: ${risk.urgency}; follow up ${risk.follow_up}.`, 'risk-action');
+    if (prediction.prediction) {
+      addRiskParagraph(panel, `Next-day outlook for ${prediction.target_date}: ${prediction.prediction} (rule score ${prediction.rule_score}/100; ${prediction.evidence_level}).`, 'risk-title');
+      addRiskParagraph(panel, prediction.limitations, 'hint');
+    } else addRiskParagraph(panel, prediction.message || 'No next-day outlook available.');
+    await refreshAlerts();
+    setStatus('District risk and outlook updated from the selected dataset.', 'success');
+  } catch (error) { panel.textContent = `Assessment unavailable: ${error.message}`; }
+}
+
+async function refreshAlerts() {
+  const panel = document.getElementById('alertsPanel');
+  const q = new URLSearchParams({ mode: selectedMode() });
+  if (stateSelect.value) q.set('state', stateSelect.value);
+  if (districtSelect.value) q.set('district', districtSelect.value);
+  try {
+    const { alerts } = await requestJson(`/api/alerts?${q}`);
+    panel.replaceChildren();
+    if (!alerts.length) { panel.textContent = 'No alerts for this area and dataset. Assess the district after loading observations.'; return; }
+    alerts.forEach(alert => {
+      const card = document.createElement('article'); card.className = 'alert-card';
+      const heading = document.createElement('strong'); heading.textContent = `${alert.is_test ? 'TEST · ' : ''}${alert.severity} · ${alert.status} · ${alert.risk_score}/100`; card.append(heading);
+      addRiskParagraph(card, `${alert.district}, ${alert.state} · ${new Date(alert.created_at).toLocaleString()}`);
+      addRiskParagraph(card, alert.reason);
+      addRiskParagraph(card, `Recommended: ${alert.recommendation}`);
+      if (alert.status === 'Open') for (const action of ['acknowledge', 'dismiss']) {
+        const button = document.createElement('button'); button.className = 'button button-small'; button.textContent = action === 'acknowledge' ? 'Acknowledge' : 'Dismiss';
+        button.onclick = async () => { try { await requestJson(`/api/alerts/${alert.id}/${action}`, { method: 'POST' }); await refreshAlerts(); } catch (e) { setStatus(e.message, 'error'); } };
+        card.append(button);
+      }
+      panel.append(card);
+    });
+  } catch (error) { panel.textContent = `Alerts unavailable: ${error.message}`; }
+}
+
+document.getElementById('loadDemoButton').addEventListener('click', async () => {
+  const button = document.getElementById('loadDemoButton'); button.disabled = true;
+  try {
+    const data = await requestJson('/api/demo/load', { method: 'POST' });
+    dataMode.value = 'demo'; updateSystemMode(); await loadDistricts('Punjab'); stateSelect.value = 'Punjab'; districtSelect.value = 'Amritsar';
+    startInput.value = data.start_date; endInput.value = data.end_date;
+    document.getElementById('dataMessage').textContent = `${data.label} · ${data.inserted} rows loaded; ${data.alerts_created.length} risk alert(s) generated.`;
+    await loadLocalObservations(); await assessDistrict(); await refreshAlerts();
+  } catch (error) { setStatus(`Demo data could not load: ${error.message}`, 'error'); }
+  finally { button.disabled = false; }
+});
+
+document.getElementById('uploadCsvButton').addEventListener('click', async () => {
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) return setStatus('Choose a CSV file first.', 'error');
+  if (!stateSelect.value || !districtSelect.value) return setStatus('Select the state and district the CSV covers.', 'error');
+  const q = new URLSearchParams({ default_state: stateSelect.value, district: districtSelect.value });
+  try {
+    const data = await requestJson(`/api/observations/upload?${q}`, { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: await file.text() });
+    dataMode.value = 'uploaded'; updateSystemMode();
+    if (data.start_date) startInput.value = data.start_date;
+    if (data.end_date) endInput.value = data.end_date;
+    document.getElementById('dataMessage').textContent = `Imported ${data.inserted} observation(s), ${data.duplicates} duplicate(s), ${data.rejected} rejected row(s). Stored locally.`;
+    await loadLocalObservations(); await assessDistrict(); await refreshAlerts();
+  } catch (error) { setStatus(`CSV import failed: ${error.message}`, 'error'); }
+});
+
+document.getElementById('showLocalButton').addEventListener('click', loadLocalObservations);
+document.getElementById('assessButton').addEventListener('click', assessDistrict);
+document.getElementById('testAlertButton').addEventListener('click', async () => {
+  if (!stateSelect.value || !districtSelect.value) return setStatus('Choose a district before creating a test alert.', 'error');
+  try { await requestJson(`/api/alerts/test?${new URLSearchParams({ state: stateSelect.value, district: districtSelect.value })}`, { method: 'POST' }); await refreshAlerts(); setStatus('Simulated test alert created. Acknowledge or dismiss it below.', 'success'); }
+  catch (error) { setStatus(error.message, 'error'); }
+});
+dataMode.addEventListener('change', () => { updateSystemMode(); loadLocalObservations(); refreshAlerts(); });
+stateSelect.addEventListener('change', () => { refreshAlerts(); });
+districtSelect.addEventListener('change', () => { refreshAlerts(); });
+startInput.addEventListener('change', () => { if (['demo','uploaded','all'].includes(selectedMode())) loadLocalObservations(); });
+endInput.addEventListener('change', () => { if (['demo','uploaded','all'].includes(selectedMode())) loadLocalObservations(); });
+updateSystemMode();
