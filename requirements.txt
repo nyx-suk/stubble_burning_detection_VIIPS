@@ -1,0 +1,21 @@
+# Core web framework and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Google Earth Engine
+earthengine-api==0.1.378
+
+# Data validation
+pydantic==2.5.0
+
+# Static file serving
+aiofiles==23.2.1
+
+# Form data handling
+python-multipart==0.0.6
+
+# Geographic data handling
+geojson==3.1.0
+
+# Date utilities
+python-dateutil==2.8.2
