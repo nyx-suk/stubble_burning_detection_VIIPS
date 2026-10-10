@@ -42,11 +42,11 @@ def stubble_burning_detection(geometry, year=2022, region_name="Punjab"):
     # === 2. ACTIVE FIRE DETECTION ===
     print("2. Detecting active fires using MODIS and VIIRS data...")
     
-    # MODIS Active Fire Data (1km resolution)
+    # MODIS Terra active fire mask (1km resolution; FireMask classes 7-9 are fires)
     modis_fire = ee.ImageCollection('MODIS/061/MOD14A1').filterBounds(geometry)
     
-    # VIIRS Active Fire Data (375m resolution - better spatial resolution)
-    viirs_fire = ee.ImageCollection('NOAA/VIIRS/001/VNP14IMGML').filterBounds(geometry)
+    # VIIRS daily active fire mask (1km); FireMask classes 7-9 are fires.
+    viirs_fire = ee.ImageCollection('NASA/VIIRS/002/VNP14A1').filterBounds(geometry)
     
     # Filter for rice stubble burning season
     rice_modis_fires = modis_fire.filter(ee.Filter.date(rice_season_start, rice_season_end))
@@ -57,23 +57,26 @@ def stubble_burning_detection(geometry, year=2022, region_name="Punjab"):
     wheat_viirs_fires = viirs_fire.filter(ee.Filter.date(wheat_season_start, wheat_season_end))
     
     # Create fire frequency maps
-    def create_fire_frequency_map(fire_collection, confidence_band='confidence'):
-        """Create fire frequency map from active fire collection"""
-        # Filter for high confidence fires only
-        high_confidence = fire_collection.map(lambda img: img.updateMask(img.select(confidence_band).gte(75)))
-        
-        # Count fire occurrences
-        fire_count = high_confidence.select('confidence').reduce(ee.Reducer.count()).rename('fire_count')
-        fire_frequency = high_confidence.select('confidence').reduce(ee.Reducer.sum()).rename('fire_frequency')
-        
+    def create_fire_frequency_map(fire_collection, fire_mask_band='FireMask'):
+        """Count nominal/high confidence fire-mask detections (classes 8-9)."""
+        def mask_fire(image):
+            fire_mask = image.select(fire_mask_band)
+            fire = fire_mask.eq(8).Or(fire_mask.eq(9))
+            # Keep valid non-fire classes as zero so the seasonal sum yields zero, not masked pixels.
+            return fire.rename('fire_occurrence')
+
+        fire_occurrences = fire_collection.map(mask_fire)
+        fire_count = fire_occurrences.sum().rename('fire_count')
+        # Kept as a separate result for downstream weighting; it is occurrence count too.
+        fire_frequency = fire_count.rename('fire_frequency')
         return fire_count, fire_frequency
     
     # Create fire maps for both seasons
-    rice_fire_count_modis, rice_fire_freq_modis = create_fire_frequency_map(rice_modis_fires, 'confidence')
-    rice_fire_count_viirs, rice_fire_freq_viirs = create_fire_frequency_map(rice_viirs_fires, 'confidence')
+    rice_fire_count_modis, rice_fire_freq_modis = create_fire_frequency_map(rice_modis_fires)
+    rice_fire_count_viirs, rice_fire_freq_viirs = create_fire_frequency_map(rice_viirs_fires)
     
-    wheat_fire_count_modis, wheat_fire_freq_modis = create_fire_frequency_map(wheat_modis_fires, 'confidence')
-    wheat_fire_count_viirs, wheat_fire_freq_viirs = create_fire_frequency_map(wheat_viirs_fires, 'confidence')
+    wheat_fire_count_modis, wheat_fire_freq_modis = create_fire_frequency_map(wheat_modis_fires)
+    wheat_fire_count_viirs, wheat_fire_freq_viirs = create_fire_frequency_map(wheat_viirs_fires)
     
     # === 3. BURNED AREA DETECTION ===
     print("3. Detecting burned areas using Sentinel-2...")
@@ -90,15 +93,15 @@ def stubble_burning_detection(geometry, year=2022, region_name="Punjab"):
         post_fire_end = end_date
         
         def mask_clouds(image):
-            """Cloud masking function for Sentinel-2"""
-            qa = image.select('QA60')
-            cloud_bit_mask = 1 << 10
-            cirrus_bit_mask = 1 << 11
-            mask = qa.bitwiseAnd(cloud_bit_mask).eq(0).And(qa.bitwiseAnd(cirrus_bit_mask).eq(0))
-            return image.updateMask(mask).divide(10000)
+            """Mask bad Sentinel-2 scene classes and scale SR reflectance bands."""
+            scl = image.select('SCL')
+            mask = (scl.neq(1).And(scl.neq(3)).And(scl.neq(7))
+                    .And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10)).And(scl.neq(11)))
+            # S2_SR_HARMONIZED optical reflectance is stored as integers scaled by 10000.
+            return image.select(['B4', 'B8', 'B12']).updateMask(mask).divide(10000)
         
         # Load Sentinel-2 data
-        s2 = ee.ImageCollection('COPERNICUS/S2_SR').filterBounds(geometry).map(mask_clouds)
+        s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filterBounds(geometry).map(mask_clouds)
         
         # Pre-fire composite
         pre_fire = s2.filter(ee.Filter.date(pre_fire_start, pre_fire_end)).median()
@@ -242,8 +245,12 @@ def stubble_burning_detection(geometry, year=2022, region_name="Punjab"):
     # Compare with MODIS Burned Area Product
     modis_ba = ee.ImageCollection('MODIS/061/MCD64A1').filterBounds(geometry)
     
-    rice_ba_modis = modis_ba.filter(ee.Filter.date(rice_season_start, rice_season_end)).select('BurnDate').reduce(ee.Reducer.count())
-    wheat_ba_modis = modis_ba.filter(ee.Filter.date(wheat_season_start, wheat_season_end)).select('BurnDate').reduce(ee.Reducer.count())
+    rice_ba_modis = (modis_ba.filter(ee.Filter.date(rice_season_start, rice_season_end))
+                     .select('BurnDate').map(lambda image: image.updateMask(image.select('BurnDate').gt(0)))
+                     .count().rename('burned_observation_count'))
+    wheat_ba_modis = (modis_ba.filter(ee.Filter.date(wheat_season_start, wheat_season_end))
+                      .select('BurnDate').map(lambda image: image.updateMask(image.select('BurnDate').gt(0)))
+                      .count().rename('burned_observation_count'))
     
     # === 9. RESULTS AND VISUALIZATION ===
     print("9. Preparing results and visualizations...")

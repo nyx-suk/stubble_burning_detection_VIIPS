@@ -102,7 +102,7 @@ def get_agricultural_mask(district_geom):
     """Create mask for agricultural areas using land cover data"""
     try:
         # Use MODIS Land Cover for agricultural areas
-        landcover = ee.ImageCollection("MODIS/006/MCD12Q1") \
+        landcover = ee.ImageCollection("MODIS/061/MCD12Q1") \
                      .filterDate('2020-01-01', '2020-12-31') \
                      .first() \
                      .select('LC_Type1')
