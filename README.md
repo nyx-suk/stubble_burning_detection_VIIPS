@@ -1,67 +1,88 @@
-HEAD
-# Satellite Stubble Burning Detection & Analysis Platform
+# Satellite Stubble Burning Detection
 
-![GitHub repo size](https://img.shields.io/github/repo-size/your-username/stubble-burning-detection)![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+This repository contains FastAPI applications and Google Earth Engine scripts for exploring satellite fire detections and agricultural burning in India. The web apps let you select a state, district, and date range, view detected hotspots on a map, and export results as CSV.
 
-A comprehensive geospatial intelligence platform for monitoring and analyzing agricultural fires using satellite data. This project features real-time web applications that progress from single-source detection to a high-accuracy data fusion model, and culminates in advanced analytical scripts that use satellite embeddings and atmospheric data to assess the full environmental context of burning events.
+## Repository contents
 
-## 🌟 Project Summary
+| File | Purpose |
+| --- | --- |
+| `app_VIIRS_375m.py` | Hotspot detection using NASA/NOAA VIIRS LANCE C2 data. Runs on port 8080. |
+| `app_VIIRS_collection_02_1km.py` | Hotspot analysis using the VIIRS VNP14A1 daily product. Runs on port 8000. |
+| `app_VIIRS_combination.py` | Detection app combining LANCE C2 and VNP14A1 data. Runs on port 7000. |
+| `main.py` | Separate FastAPI entry point; currently initializes Earth Engine but does not define the app routes used by the three standalone applications. |
+| `stubble_burning_data_embedding.py` | Earth Engine analysis of fire, burned-area, atmospheric, and satellite-embedding indicators. |
+| `crop_classification_data_embedding.py` | Earth Engine embedding and clustering example for crop-land analysis in Cerro Gordo County, Iowa. |
+| `static/` | HTML, CSS, and JavaScript frontend assets. |
 
-This project is a multi-stage solution for detecting and analyzing agricultural stubble burning. At its core, it harnesses the power of the VIIRS satellite sensor by utilizing two distinct data streams: the **near real-time (LANCE C2)** product for immediate hotspot detection and the **standard daily (VNP14A1)** fire product for validated analysis.
+The three VIIRS applications are independent alternatives. Start the app you want to use; they are not one combined service. Each exposes state and district selection, district boundary and data checks, a detection endpoint, and CSV export. Exact detection behavior depends on the selected data source and the application’s implementation.
 
-The platform evolves from simple, high-sensitivity web apps to a sophisticated **data fusion model** that combines both VIIRS streams for superior accuracy. It is complemented by powerful backend scripts that perform deep analysis, correlating fire events with burn scars, air pollution, and land-use changes identified using Google's Satellite Embeddings.
+## Requirements
 
-## ✨ Key Features
+- Python 3.9 or newer
+- A Google Earth Engine account with access to the datasets used by the selected app
+- A Google Cloud project configured for Earth Engine
 
--   **Real-Time Fire Detection:** Interactive web dashboard for visualizing active fires using near real-time VIIRS LANCE C2 data.
--   **Validated Daily Analysis:** A separate interface optimized for analyzing daily fire patterns using the processed VIIRS VNP14A1 product.
--   **Advanced Data Fusion:** A high-accuracy model that combines both VIIRS datasets to cross-validate hotspots, reduce false positives, and improve detection confidence.
--   **Environmental Impact Analysis:** Backend scripts that integrate multiple satellite sources (VIIRS, Sentinel-2, TROPOMI) and satellite embeddings to create a holistic view of stubble burning and its atmospheric impact.
--   **Crop Classification:** An analytical script to classify crop types, providing essential context to differentiate between burning seasons (e.g., rice vs. wheat).
--   **Interactive Map Interface:** A user-friendly frontend built with Leaflet.js to display geospatial data, district boundaries, and fire intensity.
--   **Data Export:** Functionality to export detected fire hotspot data to CSV for further analysis.
-
-## 🛠️ Tech Stack
-
--   **Backend:** Python, FastAPI, Google Earth Engine API
--   **Frontend:** HTML, CSS, JavaScript, Leaflet.js
--   **Core Libraries:** `uvicorn`, `pandas`, `earthengine-api`
--   **Deployment:** The application is built with FastAPI and can be served using Uvicorn.
-
-## 📂 Project Components
-
-The repository is structured into two main parts: the interactive web application and the advanced analytical scripts.
-
-### 1. Web Applications (Real-Time Monitoring)
-
-The project includes three standalone FastAPI applications that demonstrate an evolution in detection logic. The final, integrated application is run from `main.py`.
-
--   **`app_VIIRS_375m.py`:** A real-time fire detection app using NASA's LANCE VIIRS C2 (375m) dataset. Optimized for maximum sensitivity to detect active fire hotspots as they occur.
--   **`app_VIIRS_collection_02_1km.py`:** A specialized app for detecting agricultural stubble burning events using the NASA VIIRS VNP14A1 daily fire product. The algorithm is tuned for extreme sensitivity within agricultural areas.
--   **`app_VIIRS_combination.py`:** An advanced system that **fuses data** from both LANCE C2 and VNP14A1. This data fusion approach improves detection accuracy by cross-validating fire events.
--   **`main.py`:** The main entry point for the primary web application, which serves the frontend (`static/`) and exposes the core API endpoints.
-
-### 2. Analytical Scripts (In-Depth Analysis)
-
-These scripts are designed for offline analysis to extract deeper insights from the satellite data.
-
--   **`stubble_burning_data_embedding.py`:** A powerful script for post-event analysis. It integrates satellite embeddings (for land-use change detection), VIIRS/MODIS (for active fires), Sentinel-2 (for high-resolution burn scars), and TROPOMI (for CO & NO₂ pollution) to create a comprehensive "burning index".
--   **`crop_classification_data_embedding.py`:** A script that uses Google's Satellite Embeddings to perform crop classification over the region of interest. This helps provide context to the fire data, identifying which crop types are most associated with burning events.
-
-## 🚀 Setup and Installation
-
-Follow these steps to set up and run the project locally.
-
-### Prerequisites
-
--   Python 3.9+
--   A Google Earth Engine account and an associated Google Cloud Project.
-
-### 1. Clone the Repository
+Install the Python dependencies:
 
 ```bash
 git clone https://github.com/deepeshyadav760/stubble-burning-detection.git
 cd stubble-burning-detection
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt
+```
 
-# stubble_burning_detection_VIIPS
-050278c1e2ea530c0eb2d9e14e5bd7c2f346a0a9
+## Configure Earth Engine
+
+Authenticate Earth Engine before launching an app:
+
+```bash
+earthengine authenticate
+```
+
+The web application scripts initialize Earth Engine with the project ID `ee-deepeshy`. If you use a different Cloud project, update the `ee.Initialize(project=...)` calls in the script you plan to run. The analysis scripts also call Earth Engine initialization directly; configure them for your own project and credentials as needed.
+
+## Run a web application
+
+Run one of the following from the repository root:
+
+```bash
+python app_VIIRS_combination.py
+```
+
+Then open <http://localhost:7000>. Or run either standalone detector:
+
+```bash
+python app_VIIRS_375m.py
+# Open http://localhost:8080
+```
+
+```bash
+python app_VIIRS_collection_02_1km.py
+# Open http://localhost:8000
+```
+
+The applications bind to localhost by default. Keep the process running while using the app. Earth Engine requests need network access and valid credentials; dataset availability and request limits can affect results.
+
+## API overview
+
+Each detector provides endpoints for its web interface and data workflow. Open its interactive API documentation at `/docs` after starting it. Detection is submitted with a state, district, and date range; the browser interface also provides hotspot display and CSV export.
+
+## Run the analysis scripts
+
+The analysis files are standalone examples, not API endpoints. They make Earth Engine calls and may retrieve results directly into Python. Review and configure their region, year, datasets, and Earth Engine project before running:
+
+```bash
+python stubble_burning_data_embedding.py
+python crop_classification_data_embedding.py
+```
+
+The crop classification example currently targets Cerro Gordo County, Iowa and labels clusters using an area-based heuristic. Its output should be treated as exploratory, not as a validated crop classification. The stubble-burning analysis combines several indicators; its results likewise require independent validation before being used as authoritative measurements.
+
+## Data and interpretation
+
+Hotspots represent satellite fire detections, not a definitive determination that a field was intentionally burned. Spatial resolution, cloud conditions, overpass timing, product latency, and the selected detection logic all affect what is observed. The scripts and applications are research prototypes; validate results against suitable ground truth before operational or policy use.
+
+## Dependencies and license
+
+Python dependencies are listed in [`requirements.txt`](requirements.txt). See [`LICENSE`](LICENSE) for the repository license.

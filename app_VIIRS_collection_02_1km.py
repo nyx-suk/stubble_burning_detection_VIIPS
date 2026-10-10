@@ -363,7 +363,10 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
             
             return {
                 'fire_pixels': 0,
+                'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
+                'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
                 'hotspots_coordinates': [],
@@ -378,8 +381,14 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
         
         # Calculate statistics
         fire_pixels = len(hotspots)
-        fire_area_hectares = fire_pixels * 0.140625  # 375m x 375m = 0.140625 hectares
+        # 1km x 1km = 1,000,000 m² = 100.0 hectares nominal footprint per pixel
+        nominal_footprint_hectares = fire_pixels * 100.0
         max_frp = max([h['frp'] for h in hotspots], default=0.0)
+        area_disclaimer = (
+            "Nominal hotspot footprint represents aggregate spatial extent of 1km pixels containing active "
+            "thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel in extent. "
+            "Verified burned area requires high-resolution burn scar analysis (e.g. Sentinel-2 dNBR)."
+        )
         
         # Store current fire data for CSV export
         current_fire_data = {
@@ -417,7 +426,10 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
         
         return {
             'fire_pixels': fire_pixels,
-            'fire_area_hectares': round(fire_area_hectares, 2),
+            'nominal_footprint_hectares': round(nominal_footprint_hectares, 2),
+            'fire_area_hectares': round(nominal_footprint_hectares, 2),  # Maintained for backwards compatibility
+            'area_disclaimer': area_disclaimer,
+            'pixel_resolution_meters': 1000,
             'fire_hotspots': len(hotspots),
             'max_frp': round(max_frp, 3),
             'hotspots_coordinates': hotspots,
@@ -425,10 +437,10 @@ def detect_viirs_stubble_burning(state: str, district: str, start_date: str, end
             'district_boundary': boundary_info['boundary_geojson'],
             'map_bounds': boundary_info['bounds'],
             'viirs_images_used': image_count,
-            'detection_method': 'Enhanced Stubble Burning Detection',
+            'detection_method': 'VNP14A1 FireMask Detection',
             'dataset': 'NASA/VIIRS/002/VNP14A1',
-            'resolution': '375m',
-            'sensitivity': 'Optimized for Agricultural Fires',
+            'resolution': '1km',
+            'sensitivity': 'FireMask classes 7-9 (Low, Nominal, High confidence)',
             'status': 'Success'
         }
         
@@ -450,7 +462,10 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
         if boundary_info['status'] != 'success':
             return {
                 'fire_pixels': 0,
+                'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
+                'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
                 'hotspots_coordinates': [],
@@ -458,9 +473,9 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
                 'district_boundary': None,
                 'map_bounds': None,
                 'viirs_images_used': 0,
-                'detection_method': 'Ultra-Aggressive VIIRS Detection',
+                'detection_method': 'VNP14A1 FireMask Detection',
                 'dataset': 'NASA/VIIRS/002/VNP14A1',
-                'resolution': '300m + 500m multi-scale',
+                'resolution': '1km',
                 'sensitivity': 'Boundary not found',
                 'status': f'Error: District {district} not found in {state}'
             }
@@ -485,7 +500,10 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
             
             return {
                 'fire_pixels': 0,
+                'nominal_footprint_hectares': 0.0,
                 'fire_area_hectares': 0.0,
+                'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+                'pixel_resolution_meters': 1000,
                 'fire_hotspots': 0,
                 'max_frp': 0.0,
                 'hotspots_coordinates': [],
@@ -493,20 +511,26 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
                 'district_boundary': boundary_info['boundary_geojson'],
                 'map_bounds': boundary_info['bounds'],
                 'viirs_images_used': 0,
-                'detection_method': 'Ultra-Aggressive VIIRS Detection',
+                'detection_method': 'VNP14A1 FireMask Detection',
                 'dataset': 'NASA/VIIRS/002/VNP14A1',
-                'resolution': '300m + 500m multi-scale',
+                'resolution': '1km',
                 'sensitivity': 'No VIIRS data available',
                 'status': 'No VIIRS data found for this period'
             }
         
-        # Extract fire spots using ultra-aggressive detection
+        # Extract fire spots using VNP14A1 detection
         hotspots = extract_stubble_burning_spots(viirs, district_geom)
         
         # Calculate statistics
         fire_pixels = len(hotspots)
-        fire_area_hectares = fire_pixels * 0.140625  # 375m x 375m = 0.140625 hectares
+        # 1km x 1km = 1,000,000 m² = 100.0 hectares nominal footprint per pixel
+        nominal_footprint_hectares = fire_pixels * 100.0
         max_frp = max([h['frp'] for h in hotspots], default=0.0)
+        area_disclaimer = (
+            "Nominal hotspot footprint represents aggregate spatial extent of 1km pixels containing active "
+            "thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel in extent. "
+            "Verified burned area requires high-resolution burn scar analysis (e.g. Sentinel-2 dNBR)."
+        )
         
         # Store current fire data for CSV export
         current_fire_data = {
@@ -544,7 +568,10 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
         
         return {
             'fire_pixels': fire_pixels,
-            'fire_area_hectares': round(fire_area_hectares, 2),
+            'nominal_footprint_hectares': round(nominal_footprint_hectares, 2),
+            'fire_area_hectares': round(nominal_footprint_hectares, 2),  # Maintained for backwards compatibility
+            'area_disclaimer': area_disclaimer,
+            'pixel_resolution_meters': 1000,
             'fire_hotspots': len(hotspots),
             'max_frp': round(max_frp, 3),
             'hotspots_coordinates': hotspots,
@@ -552,19 +579,22 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
             'district_boundary': boundary_info['boundary_geojson'],
             'map_bounds': boundary_info['bounds'],
             'viirs_images_used': image_count,
-            'detection_method': 'Ultra-Aggressive VIIRS Detection',
+            'detection_method': 'VNP14A1 FireMask Detection',
             'dataset': 'NASA/VIIRS/002/VNP14A1',
-            'resolution': '300m + 500m multi-scale',
-            'sensitivity': 'Ultra-low thresholds + Multi-round detection',
+            'resolution': '1km',
+            'sensitivity': 'FireMask classes 7-9 (Low, Nominal, High confidence)',
             'status': 'Success'
         }
         
     except Exception as e:
-        print(f"❌ Ultra-Aggressive VIIRS detection error: {e}")
+        print(f"❌ VIIRS fire detection error: {e}")
         # Return a proper error response instead of raising exception
         return {
             'fire_pixels': 0,
+            'nominal_footprint_hectares': 0.0,
             'fire_area_hectares': 0.0,
+            'area_disclaimer': 'Nominal footprint represents aggregate spatial extent of 1km pixels containing active thermal detections, NOT verified burned area. Agricultural fires are typically sub-pixel. Verified burned area requires burn-scar analysis (e.g. Sentinel-2 dNBR).',
+            'pixel_resolution_meters': 1000,
             'fire_hotspots': 0,
             'max_frp': 0.0,
             'hotspots_coordinates': [],
@@ -572,9 +602,9 @@ def detect_viirs_fires_enhanced(state: str, district: str, start_date: str, end_
             'district_boundary': None,
             'map_bounds': None,
             'viirs_images_used': 0,
-            'detection_method': 'Ultra-Aggressive VIIRS Detection',
+            'detection_method': 'VNP14A1 FireMask Detection',
             'dataset': 'NASA/VIIRS/002/VNP14A1',
-            'resolution': '300m + 500m multi-scale',
+            'resolution': '1km',
             'sensitivity': 'Error occurred during detection',
             'status': f'Error: {str(e)}'
         }
@@ -679,7 +709,8 @@ async def dashboard():
             <h3>🎯 Detection Results</h3>
             <div id="resultsContainer" class="hidden">
                 <div class="result-item"><span>Fire Pixels:</span> <span id="firePixels">-</span></div>
-                <div class="result-item"><span>Fire Area:</span> <span id="fireArea">-</span></div>
+                <div class="result-item"><span>Nominal Footprint:</span> <span id="fireArea">-</span></div>
+                <div style="font-size: 10px; color: #bdc3c7; margin-top: -3px; margin-bottom: 5px;">*1km hotspot footprint; sub-pixel fires do not burn entire pixel</div>
                 <div class="result-item"><span>Stubble Spots:</span> <span id="fireHotspots">-</span></div>
                 <div class="result-item"><span>Max FRP:</span> <span id="maxFRP">-</span></div>
                 <div class="result-item"><span>Images Used:</span> <span id="viirsImages">-</span></div>
@@ -913,7 +944,7 @@ async def dashboard():
                 
                 // Update results
                 document.getElementById('firePixels').textContent = data.fire_pixels.toLocaleString();
-                document.getElementById('fireArea').textContent = data.fire_area_hectares + ' hectares';
+                document.getElementById('fireArea').textContent = (data.nominal_footprint_hectares || data.fire_area_hectares) + ' ha (footprint)';
                 document.getElementById('fireHotspots').textContent = data.fire_hotspots.toLocaleString();
                 document.getElementById('maxFRP').textContent = data.max_frp + ' MW';
                 document.getElementById('viirsImages').textContent = data.viirs_images_used;
@@ -1034,7 +1065,7 @@ async def dashboard():
                 
                 document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
                 
-                alert(`🎯 Ultra-Aggressive Fire Detection Complete!\\n\\nFire Spots Detected: ${data.fire_hotspots}\\nTotal Fire Area: ${data.fire_area_hectares} hectares\\nMax FRP: ${data.max_frp} MW\\nDetection Method: ${data.detection_method}\\nVIIRS Images Used: ${data.viirs_images_used}\\n\\n📍 Light color palette for better visibility!\\n🔥 Multi-round detection with ${data.sensitivity || 'ultra-low thresholds'}\\n\\n🎯 Target: 800-1000+ fires for November 2020`);
+                alert(`🎯 VIIRS VNP14A1 Fire Detection Complete!\\n\\nFire Spots Detected: ${data.fire_hotspots}\\nNominal Pixel Footprint: ${data.nominal_footprint_hectares || data.fire_area_hectares} ha\\n(Note: Nominal 1km footprint; actual burned area requires Sentinel-2 burn scar analysis)\\nMax FRP: ${data.max_frp} MW\\nDetection Method: ${data.detection_method}\\nVIIRS Images Used: ${data.viirs_images_used}`);
 
             } catch (error) {
                 console.error('❌ Fire detection error:', error);
