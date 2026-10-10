@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore satellite fire detections and agricultural burning indicators.">
+  <title>Satellite Fire Monitor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-mark" aria-hidden="true">◎</div>
+    <div><p class="eyebrow">GEOSPATIAL MONITORING</p><h1>Satellite Fire Monitor</h1></div>
+    <div class="topbar-status"><span class="status-dot"></span>VIIRS monitoring</div>
+  </header>
+  <main class="layout">
+    <aside class="panel">
+      <section class="panel-section">
+        <p class="eyebrow">DETECTION SOURCE</p>
+        <label for="product">Satellite product</label>
+        <select id="product">
+          <option value="fusion">VIIRS data fusion</option>
+          <option value="lance">VIIRS LANCE C2 · 375 m</option>
+          <option value="daily">VIIRS VNP14A1 · 1 km</option>
+        </select>
+        <p id="productDescription" class="hint">Cross-checks near real-time and daily VIIRS fire products.</p>
+      </section>
+      <section class="panel-section">
+        <p class="eyebrow">AREA AND DATE</p>
+        <label for="state">State</label><select id="state"><option value="">Loading states…</option></select>
+        <label for="district">District</label><select id="district" disabled><option value="">Choose a state first</option></select>
+        <div class="date-grid">
+          <div><label for="startDate">Start date</label><input id="startDate" type="date"></div>
+          <div><label for="endDate">End date</label><input id="endDate" type="date"></div>
+        </div>
+        <button id="analyzeButton" class="button button-primary">Analyze hotspots</button>
+        <p id="status" class="status-message" role="status" aria-live="polite">Choose an area and date range.</p>
+      </section>
+      <section id="results" class="panel-section results hidden">
+        <div class="results-heading"><p class="eyebrow">LATEST ANALYSIS</p><button id="exportButton" class="button button-small" disabled>Export CSV</button></div>
+        <div class="metric"><span>Hotspots</span><strong id="hotspotCount">—</strong></div>
+        <div class="metric"><span>Nominal pixel footprint</span><strong id="footprint">—</strong></div>
+        <p class="caveat">Hotspot footprint is the area of pixels containing thermal detections. It is not verified burned area; a hotspot may cover only part of a pixel. Burn scars require separate analysis.</p>
+        <div class="metric"><span>Maximum FRP</span><strong id="maxFrp">—</strong></div>
+        <div class="metric"><span>Images used</span><strong id="imageCount">—</strong></div>
+      </section>
+      <section class="legend panel-section">
+        <p class="eyebrow">MAP LEGEND</p>
+        <div><span class="legend-fire"></span>Satellite hotspot</div>
+        <div><span class="legend-boundary"></span>District boundary</div>
+        <p id="resolutionNote" class="hint">Fusion product · 375 m and 1 km inputs</p>
+      </section>
+      <footer>Satellite detections are indicators and should be validated before operational use.</footer>
+    </aside>
+    <section class="map-panel" aria-label="Hotspot map">
+      <div id="map"></div>
+      <div class="map-label"><span class="status-dot"></span><span id="mapStatus">Map ready</span></div>
+    </section>
+  </main>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
