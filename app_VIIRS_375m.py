@@ -516,13 +516,11 @@ async def dashboard():
             <h3>⚙️ Detection Settings</h3>
             <div class="sensitivity-info">
                 <strong>🎯 LANCE C2 Detection:</strong><br>
-                • FRP threshold (>0.001 MW)<br>
-                • Brightness temperature (>310K)<br>
-                • Quality flag analysis<br>
-                • Triple sampling rounds<br>
-                • Agricultural area buffering<br>
-                • 15,000+ pixel sampling<br>
-                • Multi-scale analysis (250m-500m)<br>
+                • FRP confirmation (>0.1 MW)<br>
+                • Contextual thermal (T4 > 325K & ΔT > 12K)<br>
+                • Flaming threshold (T4 > 340K)<br>
+                • Quality flags & confidence respected<br>
+                • Native 375m resolution<br>
                 • Real-time data access
             </div>
         </div>
@@ -1102,9 +1100,9 @@ async def export_csv():
             current_fire_data['state'],
             current_fire_data['district'],
             current_fire_data['date_range'],
-            hotspot.get('source', 'LANCE C2 Detection'),
+            hotspot.get('source', 'LANCE C2 Active Fire'),
             '375m',
-            'Enhanced LANCE C2 Detection'
+            'Contextual Active Fire Detection (Schroeder et al., 2014)'
         ])
     
     csv_content = output.getvalue()
@@ -1145,10 +1143,10 @@ if __name__ == "__main__":
         print(f"✅ FAO/GAUL boundaries accessible")
         
         print("\n🚀 Starting LANCE C2 fire detection server")
-        print("🔥 Real-time data with maximum sensitivity")
-        print("⚙️ FRP threshold: >0.001 MW | Temperature: >310K | Sampling: 15,000 pixels")
-        print("🎨 Light color palette with enhanced transparency")
-        print("🔄 Triple-round detection with temporal compositing")
+        print("🔥 Real-time data with contextual thermal anomaly detection")
+        print("⚙️ Contextual thresholds: T4 > 325K & ΔT > 12K | Flaming: T4 > 340K | FRP: >0.1 MW")
+        print("🛡️ Quality flags respected | Bare soil false-positive rejection enabled")
+        print("🔄 Sampling at native 375m resolution")
         uvicorn.run(app, host="localhost", port=8080)
         
     except Exception as e:
