@@ -11,6 +11,16 @@ from app.services.ee_client import run_with_timeout
 
 logger = logging.getLogger(__name__)
 
+# GAUL 2015 uses several legacy spellings. The dropdown retains the current,
+# user-facing names; resolve those labels against the spelling in that dataset.
+_GAUL_DISTRICT_ALIASES = {
+    "Ferozepur": ("Ferozepur", "Firozpur"),
+    "Sonipat": ("Sonipat", "Sonepat"),
+}
+_GAUL_STATE_ALIASES = {
+    "Delhi": ("Delhi", "NCT of Delhi", "National Capital Territory of Delhi"),
+}
+
 
 def nominal_pixel_footprint_hectares(pixel_count: int, pixel_size_meters: float) -> float:
     """Return the summed nominal square-pixel footprint in hectares."""
@@ -26,19 +36,27 @@ def _fetch_boundary_from_ee(state: str, district: str) -> Dict[str, Any]:
     # Load FAO/GAUL administrative boundaries
     gaul = ee.FeatureCollection("FAO/GAUL/2015/level2")
 
-    # Filter for specific district server-side
-    district_boundary = gaul.filter(ee.Filter.eq("ADM1_NAME", state)).filter(
-        ee.Filter.eq("ADM2_NAME", district)
-    )
-
-    boundary_count = district_boundary.size().getInfo()
-
-    if boundary_count == 0:
-        # Try alternative GAUL field names
-        district_boundary = gaul.filter(ee.Filter.eq("NAME_1", state)).filter(
-            ee.Filter.eq("NAME_2", district)
-        )
-        boundary_count = district_boundary.size().getInfo()
+    # Try both GAUL property conventions and known legacy spellings. Keeping
+    # the lookup constrained by the state prevents same-named districts from
+    # resolving to a different part of India.
+    state_names = _GAUL_STATE_ALIASES.get(state, (state,))
+    district_names = _GAUL_DISTRICT_ALIASES.get(district, (district,))
+    district_boundary = None
+    boundary_count = 0
+    for state_field, district_field in (("ADM1_NAME", "ADM2_NAME"), ("NAME_1", "NAME_2")):
+        for state_name in state_names:
+            for district_name in district_names:
+                candidate = gaul.filter(ee.Filter.eq(state_field, state_name)).filter(
+                    ee.Filter.eq(district_field, district_name)
+                )
+                boundary_count = candidate.size().getInfo()
+                if boundary_count:
+                    district_boundary = candidate
+                    break
+            if boundary_count:
+                break
+        if boundary_count:
+            break
 
     if boundary_count > 0:
         # Request only geometry properties to avoid transferring heavy GAUL attribute tables

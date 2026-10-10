@@ -25,6 +25,7 @@ let hotspotLayer = L.layerGroup().addTo(map);
 let boundaryLayer = null;
 let currentPage = 1;
 let exportPoll = null;
+let districtLoadVersion = 0;
 
 function dateInputValue(date) {
   const offset = date.getTimezoneOffset();
@@ -66,6 +67,7 @@ async function loadStates() {
 }
 
 async function loadDistricts(state) {
+  const version = ++districtLoadVersion;
   districtSelect.disabled = true;
   districtSelect.replaceChildren(new Option('Loading districts…', ''));
   if (!state) {
@@ -74,10 +76,13 @@ async function loadDistricts(state) {
   }
   try {
     const { districts } = await requestJson(`/api/districts/${encodeURIComponent(state)}`);
+    // Ignore a late response if the user changed states while it was loading.
+    if (version !== districtLoadVersion || state !== stateSelect.value) return;
     districtSelect.replaceChildren(new Option('Select a district', ''));
     districts.forEach(district => districtSelect.add(new Option(district, district)));
     districtSelect.disabled = false;
   } catch (error) {
+    if (version !== districtLoadVersion || state !== stateSelect.value) return;
     districtSelect.replaceChildren(new Option('Could not load districts', ''));
     setStatus(error.message, 'error');
   }
@@ -140,6 +145,14 @@ async function analyze(page = 1) {
   if (!startInput.value || !endInput.value) return setStatus('Choose both dates.', 'error');
   if (endInput.value < startInput.value) return setStatus('End date must be on or after start date.', 'error');
 
+  // Demo and uploaded datasets are already processed locally. Route these
+  // selections through the local observation ledger instead of attempting an
+  // Earth Engine query (which cannot work offline and misleadingly reports a
+  // district-boundary lookup error).
+  if (['demo', 'uploaded', 'all'].includes(selectedMode())) {
+    return analyzeStoredHotspots(state, district, page);
+  }
+
   setBusy(true);
   setStatus('Querying Earth Engine satellite data…');
   mapStatus.textContent = 'Loading detections';
@@ -178,6 +191,44 @@ async function analyze(page = 1) {
     setStatus(`${error.message} For long historical windows, create a batch export below.`, 'error');
     mapStatus.textContent = 'Analysis failed';
     exportButton.disabled = true;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function analyzeStoredHotspots(state, district, page = 1) {
+  setBusy(true);
+  setStatus('Filtering stored observations for the selected district…');
+  mapStatus.textContent = 'Loading stored detections';
+  try {
+    const query = new URLSearchParams({ state, district, mode: selectedMode(), limit: '5000' });
+    query.set('start_date', startInput.value);
+    query.set('end_date', endInput.value);
+    const data = await requestJson(`/api/monitor/observations?${query}`);
+    const allPoints = data.observations || [];
+    const pageSize = Number(document.getElementById('pageSize').value) || 100;
+    const pageCount = Math.max(1, Math.ceil(allPoints.length / pageSize));
+    currentPage = Math.min(Math.max(1, page), pageCount);
+    const points = allPoints.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const count = renderHotspots(points);
+    const pages = { page: currentPage, total_pages: pageCount, has_previous: currentPage > 1,
+      has_next: currentPage < pageCount, truncated: false };
+    document.getElementById('hotspotCount').textContent = allPoints.length.toLocaleString();
+    document.getElementById('footprint').textContent = 'Not estimated from stored observations';
+    document.getElementById('maxFrp').textContent = `${Math.max(0, ...allPoints.map(x => Number(x.frp) || 0)).toFixed(2)} MW`;
+    document.getElementById('imageCount').textContent = 'Local records';
+    document.getElementById('previousPage').disabled = !pages.has_previous;
+    document.getElementById('nextPage').disabled = !pages.has_next;
+    document.getElementById('pageInfo').textContent = `Page ${pages.page} of ${pages.total_pages}`;
+    document.getElementById('results').classList.remove('hidden');
+    exportButton.disabled = true;
+    if (count) map.fitBounds(hotspotLayer.getBounds(), { padding: [30, 30], maxZoom: 11 });
+    const simulated = selectedMode() === 'demo';
+    setStatus(`Loaded ${allPoints.length} ${simulated ? 'simulated demo' : 'stored'} observation(s) for ${district}, ${state}${simulated ? ' · examples, not live detections' : ''}.`, 'success');
+    mapStatus.textContent = `${allPoints.length.toLocaleString()} ${simulated ? 'demo' : 'stored'} observations · ${district}, ${state}`;
+  } catch (error) {
+    setStatus(`Could not analyze stored observations: ${error.message}`, 'error');
+    mapStatus.textContent = 'Analysis failed';
   } finally {
     setBusy(false);
   }
