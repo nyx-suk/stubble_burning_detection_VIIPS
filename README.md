@@ -1,0 +1,1 @@
+# stubble_burning_detection_VIIPS
